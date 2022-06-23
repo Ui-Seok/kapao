@@ -20,6 +20,9 @@ from utils.graph import *
 from GCN.model import GCN, _A
 import time
 
+font_italic = "FONT_ITALIC"
+
+
 if __name__ == '__main__':
     start = time.time()
     
@@ -142,6 +145,7 @@ if __name__ == '__main__':
             pose_list = []
             for pose in poses:
                 # print(pose)
+
                 if args.face:
                     for x, y, c in pose[data['kp_face']]:
                         cv2.circle(im0, (int(x), int(y)), args.kp_size, args.color_pose, args.kp_thick)
@@ -159,6 +163,7 @@ if __name__ == '__main__':
                     for x, y, c in pose[:5, :]:
                         if c:
                             cv2.circle(im0, (int(x), int(y)), args.kp_size, [255, 255, 0], args.kp_thick)
+
                     # print('Number of key points: ', kp_num)
                     
 
@@ -166,8 +171,12 @@ if __name__ == '__main__':
             # print(kp_dets[0].count_nonzero())
             if args.kp_bbox:
                 bboxes = scale_coords(img.shape[2:], kp_dets[0][:, :4], im0.shape[:2]).round().cpu().numpy()
-                for x1, y1, x2, y2 in bboxes:
+                for i, x1, y1, x2, y2 in enumerate(bboxes):
                     cv2.rectangle(im0, (int(x1), int(y1)), (int(x2), int(y2)), args.color_kp, thickness=args.line_thick)
+                    pose_score = poses[i].mean(axis = 0)[2]
+                    cv2.rectangle(im0, (x1, y2 - 10), (x1+40, y2), (0, 0, 255), -1)
+                    cv2.putText(im0, f"score : {round(pose_score, 2)}", (int(x1), int(y2) - 10), cv2.FONT_ITALIC, 1, (255, 0, 0), 2)
+
 
         filename = '{}'.format(osp.splitext(osp.split(file)[-1])[0])
         filename += '.png'
