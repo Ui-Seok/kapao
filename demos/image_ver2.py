@@ -99,8 +99,9 @@ if __name__ == '__main__':
     right = []
     front = []
     back = []
+    occ_list = []
     model_GCN = GCN(3, 4, torch.tensor(_A).float())
-    model_GCN.load_state_dict(torch.load("GCN/exp/2022_06_14/BestModel.pth"))
+    model_GCN.load_state_dict(torch.load("GCN/exp/NEW_GCN/BestModel.pth"))
     model_GCN.eval()
     
     for file in files:
@@ -168,10 +169,9 @@ if __name__ == '__main__':
 
                     # print('Number of key points: ', kp_num)                
                 print(pose_score)
-                print(x1, y1, x2, y2)
                 x1, y1, x2, y2 = bboxes[i]
-                cv2.rectangle(im0, (int(x1), int(y2 - 8)), (int(x1+60), int(y2)), (0, 255, 0), -1)
-                cv2.putText(im0, f"score : {round(pose_score, 2)}", (int(x1), int(y2)), cv2.FONT_ITALIC, .3, (255, 0, 0), 1)
+                #cv2.rectangle(im0, (int(x1), int(y2 - 8)), (int(x1+60), int(y2)), (0, 255, 0), -1)
+                cv2.putText(im0, f"{round(pose_score, 4)}", (int(x1), int(y2)), cv2.FONT_ITALIC, .3, (255, 0, 0), 1, )
                     
 
         if kp_dets[0].count_nonzero() != 0:
@@ -208,6 +208,7 @@ if __name__ == '__main__':
             keypoints = pose.copy()
             keypoints = np.append(keypoints,(keypoints[5:6] + keypoints[6:7])/2, axis = 0)
             keypoints = torch.tensor(keypoints).float()
+            keypoints = keypoints / torch.tensor([width, height, 1])
             pred = model_GCN(keypoints.unsqueeze(0))
             
             if pred.argmax() == 0:
@@ -230,6 +231,7 @@ if __name__ == '__main__':
             img_1 = im0.copy()                        
             if (int(pose[15,1]) > bboxes[0,3]) or (int(pose[16,1]) > bboxes[0,3]):
                 cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+                occ_list.append(filename)
                 # print('---------Save image in Occlusion!---------')
                 
             elif (int(pose[5,1]) < bboxes[0,1]) or (int(pose[6,1]) < bboxes[0,1]):
@@ -242,20 +244,25 @@ if __name__ == '__main__':
         
         else:
             img_2 = im0.copy()
+            num_person = 0
             for i in range(len(bbox_list)):                                               
                 if (int(poses[i][15,1]) > bboxes[i,3]) or (int(poses[i][16,1]) > bboxes[i,3]):
                     cv2.imwrite('output/test/Occlusion/' + filename, img_2)
                     # print('---------Save image in Occlusion!---------')
+                if poses[i].mean(axis = 0)[2] > 0.1:       
+                    num_person +=1 
             
             iou_list = multi_occ(bbox_list)
             for el in iou_list:
                 if el > 0.15:
                     cv2.imwrite('output/test/Occlusion/' + filename, img_2)
                     # print('---------Save image in Occlusion!---------')
-                    
-            cv2.imwrite('output/test/MultiPerson/' + filename, img_2)
-            # print('---------Save image in MultiPerson!---------')
+            if num_person >= 2 :
+                cv2.imwrite('output/test/MultiPerson/' + filename, img_2)
+                # print('---------Save image in MultiPerson!---------')
+                
+                
         end_patch = time.time()
-        print("total time: ", round(end_patch - start_patch, 3))
+        print("patch time: ", round(end_patch - start_patch, 3))
         print('\n')
     print("total time: ", round(time.time() - start, 3))
