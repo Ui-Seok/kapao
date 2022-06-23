@@ -100,6 +100,10 @@ if __name__ == '__main__':
     front = []
     back = []
     occ_list = []
+    multi_person = []
+
+
+
     model_GCN = GCN(3, 4, torch.tensor(_A).float())
     model_GCN.load_state_dict(torch.load("GCN/exp/NEW_GCN/BestModel.pth"))
     model_GCN.eval()
@@ -236,10 +240,12 @@ if __name__ == '__main__':
                 
             elif (int(pose[5,1]) < bboxes[0,1]) or (int(pose[6,1]) < bboxes[0,1]):
                 cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+                occ_list.append(filename)
                 # print('---------Save image in Occlusion!---------')
             
             elif kp_num <= 8:
                 cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+                occ_list.append(filename)
                 # print('---------Save image in Occlusion!---------')
         
         else:
@@ -248,6 +254,7 @@ if __name__ == '__main__':
             for i in range(len(bbox_list)):                                               
                 if (int(poses[i][15,1]) > bboxes[i,3]) or (int(poses[i][16,1]) > bboxes[i,3]):
                     cv2.imwrite('output/test/Occlusion/' + filename, img_2)
+                    occ_list.append(filename)
                     # print('---------Save image in Occlusion!---------')
                 if poses[i].mean(axis = 0)[2] > 0.1:       
                     num_person +=1 
@@ -256,12 +263,17 @@ if __name__ == '__main__':
             for el in iou_list:
                 if el > 0.15:
                     cv2.imwrite('output/test/Occlusion/' + filename, img_2)
+                    occ_list.append(filename)
                     # print('---------Save image in Occlusion!---------')
             if num_person >= 2 :
                 cv2.imwrite('output/test/MultiPerson/' + filename, img_2)
+                multi_person.append(filename)
                 # print('---------Save image in MultiPerson!---------')
                 
-                
+        normal = set(front) + set(back) - set(occ_list) - set(multi_person) - set(cutout)
+
+        for _norm in normal:
+            cv2.imwrite('output/test/Normal/' + _norm, im0)
         end_patch = time.time()
         print("patch time: ", round(end_patch - start_patch, 3))
         print('\n')
