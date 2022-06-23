@@ -131,8 +131,10 @@ if __name__ == '__main__':
                 bboxes = scale_coords(img.shape[2:], person_dets[0][:, :4], im0.shape[:2]).round().cpu().numpy()
                 bbox_num = bboxes.shape[0]
                 # print(bboxes)
-                for x1, y1, x2, y2 in bboxes:
+                for i, (x1, y1, x2, y2) in enumerate(bboxes):
                     cv2.rectangle(im0, (int(x1), int(y1)), (int(x2), int(y2)), [0, 255, 0], thickness=args.line_thick)
+                    
+                    
                     bbox_list.append([x1, y1, x2, y2])
                     bbox_asp.append(abs((y2-y1)/(x2-x1)))
                     bbox_width.append(abs(x2 - x1))
@@ -143,9 +145,9 @@ if __name__ == '__main__':
 
         if args.pose:
             pose_list = []
-            for pose in poses:
+            for i, pose in enumerate(poses):
                 # print(pose)
-
+                pose_score = poses[i].mean(axis = 0)[2]
                 if args.face:
                     for x, y, c in pose[data['kp_face']]:
                         cv2.circle(im0, (int(x), int(y)), args.kp_size, args.color_pose, args.kp_thick)
@@ -164,18 +166,21 @@ if __name__ == '__main__':
                         if c:
                             cv2.circle(im0, (int(x), int(y)), args.kp_size, [255, 255, 0], args.kp_thick)
 
-                    # print('Number of key points: ', kp_num)
+                    # print('Number of key points: ', kp_num)                
+                print(pose_score)
+                print(x1, y1, x2, y2)
+                x1, y1, x2, y2 = bboxes[i]
+                cv2.rectangle(im0, (int(x1), int(y2 - 8)), (int(x1+60), int(y2)), (0, 255, 0), -1)
+                cv2.putText(im0, f"score : {round(pose_score, 2)}", (int(x1), int(y2)), cv2.FONT_ITALIC, .3, (255, 0, 0), 1)
                     
 
         if kp_dets[0].count_nonzero() != 0:
             # print(kp_dets[0].count_nonzero())
             if args.kp_bbox:
                 bboxes = scale_coords(img.shape[2:], kp_dets[0][:, :4], im0.shape[:2]).round().cpu().numpy()
-                for i, x1, y1, x2, y2 in enumerate(bboxes):
+                for i, (x1, y1, x2, y2) in enumerate(bboxes):
                     cv2.rectangle(im0, (int(x1), int(y1)), (int(x2), int(y2)), args.color_kp, thickness=args.line_thick)
-                    pose_score = poses[i].mean(axis = 0)[2]
-                    cv2.rectangle(im0, (x1, y2 - 10), (x1+40, y2), (0, 0, 255), -1)
-                    cv2.putText(im0, f"score : {round(pose_score, 2)}", (int(x1), int(y2) - 10), cv2.FONT_ITALIC, 1, (255, 0, 0), 2)
+                   
 
 
         filename = '{}'.format(osp.splitext(osp.split(file)[-1])[0])
