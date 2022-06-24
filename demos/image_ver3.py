@@ -81,11 +81,8 @@ if __name__ == '__main__':
     model = attempt_load(args.weights, map_location=device)
     stride = int(model.stride.max())  # model stride
     imgsz = check_img_size(args.imgsz, s=stride)  # check image size
-    
-    bbox_asp = []
-    width_emp_list = []
-    height_emp_list = []
-    cut_over_list = []
+
+
     img_dir = args.img_path
     files = glob.glob(img_dir + '/*.*')
     
@@ -94,22 +91,8 @@ if __name__ == '__main__':
         shutil.rmtree(f'output/test/{fs}')
         os.mkdir(f'output/test/{fs}')
     
-    
-
-
-
-    model_GCN = GCN(3, 4, torch.tensor(_A).float())
-    model_GCN.load_state_dict(torch.load("GCN/exp/NEW_GCN/BestModel.pth"))
-    model_GCN.eval()
-    
     for file in files:
-        cutout = []
-        left = []
-        right = []
-        front = []
-        back = []
-        occ_list = []
-        multi_person = []
+        cutout, left, right, front, back, occ_list, multi_person = [], [], [], [], [], [], []
         start_patch = time.time()
         cv_img = cv2.imread(file)
         img_width = cv_img.shape[1]
@@ -131,20 +114,11 @@ if __name__ == '__main__':
             # print('person_dets:', person_dets)
             # print('person_dets[0]:', person_dets[0])
             if args.bbox:
-                bbox_list = []
-                bbox_height = []
-                bbox_width = []
                 bboxes = scale_coords(img.shape[2:], person_dets[0][:, :4], im0.shape[:2]).round().cpu().numpy()
                 bbox_num = bboxes.shape[0]
                 # print(bboxes)
                 for i, (x1, y1, x2, y2) in enumerate(bboxes):
                     cv2.rectangle(im0, (int(x1), int(y1)), (int(x2), int(y2)), [0, 255, 0], thickness=args.line_thick)
-                    
-                    
-                    bbox_list.append([x1, y1, x2, y2])
-                    bbox_asp.append(abs((y2-y1)/(x2-x1)))
-                    bbox_width.append(abs(x2 - x1))
-                    bbox_height.append(abs(y2 - y1))
                 
 
         _, poses, _, _, _ = post_process_batch(data, img, [], [[im0.shape[:2]]], person_dets, kp_dets)
@@ -171,13 +145,27 @@ if __name__ == '__main__':
                     for x, y, c in pose[:5, :]:
                         if c:
                             cv2.circle(im0, (int(x), int(y)), args.kp_size, [255, 255, 0], args.kp_thick)
-
-                    # print('Number of key points: ', kp_num)                
+                    # print('Number of key points: ', kp_num)
+                    # pose_angle
+                    left_side = pose[1,2] + pose[3,2]
+                    right_side = pose[2,2] + pose[4,2]
+                    # print(round(left_side, 4), round(right_side, 4))
+                    
+                    # 원래 0.6을 기준으로 하였음 -> 0.38 -> 0.5 -> 0.55 -> 0.57
+                    if (pose[1,2] > 0.3 or pose[2,2] > 0.3) and (left_side > right_side + 0.5): 
+                        pose_list.append('left')
+                    elif (pose[1,2] > 0.3 or pose[2,2] > 0.3) and (left_side + 0.5 < right_side): 
+                        pose_list.append('right')
+                    elif (pose[1,2] and pose[2,2]) <= 0.3:
+                        pose_list.append('back')
+                    else: 
+                        pose_list.append('front')
+                        
                 print(pose_score)
                 x1, y1, x2, y2 = bboxes[i]
                 #cv2.rectangle(im0, (int(x1), int(y2 - 8)), (int(x1+60), int(y2)), (0, 255, 0), -1)
-                cv2.putText(im0, f"{round(pose_score, 4)}", (int(x1), int(y2)), cv2.FONT_ITALIC, .3, (255, 0, 0), 1, )
-                    
+                cv2.putText(im0, f"{round(pose_score, 4)}", (int(x1), int(y2) + 5), cv2.FONT_ITALIC, .3, (255, 0, 0), 1, )
+                
 
         if kp_dets[0].count_nonzero() != 0:
             # print(kp_dets[0].count_nonzero())
@@ -185,91 +173,67 @@ if __name__ == '__main__':
                 bboxes = scale_coords(img.shape[2:], kp_dets[0][:, :4], im0.shape[:2]).round().cpu().numpy()
                 for i, (x1, y1, x2, y2) in enumerate(bboxes):
                     cv2.rectangle(im0, (int(x1), int(y1)), (int(x2), int(y2)), args.color_kp, thickness=args.line_thick)
-                   
-
+                    
 
         filename = '{}'.format(osp.splitext(osp.split(file)[-1])[0])
         filename += '.png'
         
-        width= img_width
-        height = img_height
-        pad_wid = max(int(width * 0.025), 1)
-        pad_hei = max(int(height * 0.025), 1)
+        
+        
+        for pose_angle in pose_list:
+            cv2.imwrite(f'output/test/{pose_angle}/' + filename, im0)
+        
+        
+        pad_wid = max(int(img_width * 0.025), 1)
+        pad_hei = max(int(img_height * 0.025), 1)
         nkeypoint_thr = 1
         
         num_keypoint = 0
         for pose in poses:
             for x, y, score in pose:
-                #if (not ((0+pad)<=x<=(width - pad)))  or (not ((0+pad)<=y<=(height-pad))):
-                if 0 + pad_wid > x or x > width - pad_wid or 0 + pad_hei > y or y > height - pad_hei:
+                if 0 + pad_wid > x or x > img_width - pad_wid or 0 + pad_hei > y or y > img_height - pad_hei:
                     num_keypoint += 1
 
                     if num_keypoint >= nkeypoint_thr : 
                         cutout +=[filename]
                         cv2.imwrite('output/test/CutOut/' + filename, im0)
-                        break
-                
-                
-            keypoints = pose.copy()
-            keypoints = np.append(keypoints,(keypoints[5:6] + keypoints[6:7])/2, axis = 0)
-            keypoints = keypoints / torch.tensor([width, height, 1])
-            keypoints = torch.tensor(keypoints).float()
-            pred = model_GCN(keypoints.unsqueeze(0))
-            
-            if pred.argmax() == 0:
-                cv2.imwrite('output/test/front/' + filename, im0)
-                front.append(filename)
-            elif pred.argmax() == 1:
-                cv2.imwrite('output/test/back/' + filename, im0)
-                back.append(filename)
-            elif pred.argmax() == 2:
-                cv2.imwrite('output/test/left/' + filename, im0)
-                left.append(filename)
-            else:
-                cv2.imwrite('output/test/right/' + filename, im0)
-                right.append(filename)
+
               
         if person_dets[0].count_nonzero() == 0:
-            pass
-            
-        elif bbox_num == 1:
-            img_1 = im0.copy()                        
+            cv2.imwrite('output/test/WrongTarget/' + filename, im0)
+        
+        # for one person    
+        elif bbox_num == 1:                 
             if (int(pose[15,1]) > bboxes[0,3]) or (int(pose[16,1]) > bboxes[0,3]):
-                cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+                cv2.imwrite('output/test/Occlusion/' + filename, im0)
                 occ_list.append(filename)
-                # print('---------Save image in Occlusion!---------')
                 
             elif (int(pose[5,1]) < bboxes[0,1]) or (int(pose[6,1]) < bboxes[0,1]):
-                cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+                cv2.imwrite('output/test/Occlusion/' + filename, im0)
                 occ_list.append(filename)
-                # print('---------Save image in Occlusion!---------')
             
-            elif kp_num <= 8:
-                cv2.imwrite('output/test/Occlusion/' + filename, img_1)
+            elif kp_num <= 4:
+                cv2.imwrite('output/test/Occlusion/' + filename, im0)
                 occ_list.append(filename)
-                # print('---------Save image in Occlusion!---------')
         
+        # for multi person
         else:
-            img_2 = im0.copy()
             num_person = 0
-            for i in range(len(bbox_list)):                                               
+            for i in range(len(bboxes)):                                               
                 if (int(poses[i][15,1]) > bboxes[i,3]) or (int(poses[i][16,1]) > bboxes[i,3]):
-                    cv2.imwrite('output/test/Occlusion/' + filename, img_2)
+                    cv2.imwrite('output/test/Occlusion/' + filename, im0)
                     occ_list.append(filename)
-                    # print('---------Save image in Occlusion!---------')
                 if poses[i].mean(axis = 0)[2] > 0.1:       
                     num_person +=1 
             
-            iou_list = multi_occ(bbox_list)
+            iou_list = multi_occ(bboxes)
             for el in iou_list:
                 if el > 0.15:
-                    cv2.imwrite('output/test/Occlusion/' + filename, img_2)
+                    cv2.imwrite('output/test/Occlusion/' + filename, im0)
                     occ_list.append(filename)
-                    # print('---------Save image in Occlusion!---------')
             if num_person >= 2 :
-                cv2.imwrite('output/test/MultiPerson/' + filename, img_2)
+                cv2.imwrite('output/test/MultiPerson/' + filename, im0)
                 multi_person.append(filename)
-                # print('---------Save image in MultiPerson!---------')
         
         if len(set(occ_list+ multi_person + cutout)) >= 1 :
             pass
